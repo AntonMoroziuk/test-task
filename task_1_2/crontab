@@ -1,0 +1,3 @@
+# The smallest resolution for cron is 1 min, so we need to run 2 jobs
+* * * * * python3 task_1_2.py
+* * * * * ( sleep 30 ; python3 task_1_2.py )
