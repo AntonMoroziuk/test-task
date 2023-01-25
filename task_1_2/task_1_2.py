@@ -1,13 +1,18 @@
-import os
 from datetime import datetime
 
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 
-postgres_user = os.environ["POSTGRES_USER"]
-postgres_pass = os.environ["POSTGRES_PASSWORD"]
-postgres_port = os.environ["POSTGRES_PORT"]
+def get_env_data_as_dict(path: str) -> dict:
+    with open(path, 'r') as f:
+       return dict(tuple(line.replace('\n', '').split('=')) for line
+                in f.readlines() if not line.startswith('#'))
+
+environ = get_env_data_as_dict("/.env")
+postgres_user = environ["POSTGRES_USER"]
+postgres_pass = environ["POSTGRES_PASSWORD"]
+postgres_port = environ["POSTGRES_PORT"]
 
 engine = create_engine(
     f"postgresql://{postgres_user}:{postgres_pass}@db:{postgres_port}"

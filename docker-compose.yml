@@ -14,8 +14,9 @@ services:
             # copy data
             - ./data:/data
     cron:
-        build: ./task_1_2
-        environment:
-            - POSTGRES_USER=${POSTGRES_USER}
-            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-            - POSTGRES_PORT=${POSTGRES_PORT}
+        build:
+            context: ./task_1_2
+            args:
+                POSTGRES_USER: ${POSTGRES_USER}
+                POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                POSTGRES_PORT: ${POSTGRES_PORT}
