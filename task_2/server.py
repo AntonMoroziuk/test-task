@@ -38,7 +38,7 @@ async def start_server(parquet_file_path: str):
 
     print("Server running at port 8000")
 
-    async with websockets.serve(handler, "localhost", 8000):
+    async with websockets.serve(handler, "127.0.0.1", 8000):
         await asyncio.Future()  # run forever
 
 
