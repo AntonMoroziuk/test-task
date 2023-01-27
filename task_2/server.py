@@ -1,44 +1,54 @@
 import asyncio
-import json
-from collections import OrderedDict
+from functools import partial
 
-import pandas as pd
 import websockets
+from pyarrow.parquet import ParquetFile
 
 EXAMPLE_PARQUET_FILE = "trades_sample.parquet"
-
-
-# Using ordered dict so that we can replay the data in chronological order
-to_send = OrderedDict()
+BATCH_SIZE = 1024
 
 
 async def handler(websocket, path):
-    for value in to_send.values():
-        msg = [
-            {
-                "timestamp": item["timestamp"].strftime("%Y-%m-%d %H:%M:%S.%f"),
-                "price": item["price"],
-                "volume": item["volume"],
-                "ticker": item["ticker"],
-            }
-            for item in value
-        ]
-        await websocket.send(json.dumps(msg))
+    parquet_file = ParquetFile(path)
+    iterator = parquet_file.iter_batches(batch_size=BATCH_SIZE)
+    msg = None
+
+    batch = next(iterator).to_pandas()
+
+    while batch is not None:
+        to_send = batch[batch["timestamp"].eq(batch.iloc[:1]["timestamp"].values[0])]
+        batch = batch.drop(to_send.index)
+
+        while batch.shape[0] == 0:
+            # we might have other records with the same timestamp in the next batch
+            try:
+                batch = next(iterator).to_pandas()
+            except StopIteration:
+                # this was the last batch
+                batch = None
+                break
+            
+            additional_rows = batch[
+                batch["timestamp"].eq(to_send.iloc[:1]["timestamp"])
+            ]
+
+            if additional_rows.shape[0]:
+                to_send = to_send.append(additional_rows)
+                batch = batch.drop(additional_rows.index)
+
+        to_send["timestamp"] = to_send.apply(
+            lambda x: x["timestamp"].strftime("%Y-%m-%d %H:%M:%S.%f"), axis=1
+        )
+        msg = to_send.to_json(orient="records")
+
+        await websocket.send(msg)
 
 
 async def start_server(parquet_file_path: str):
-    df = pd.read_parquet(parquet_file_path, engine="pyarrow")
-
-    # Grouping identical timestamps together to send them in one message
-    for index, row in df.iterrows():
-        if row["timestamp"] in to_send:
-            to_send[row["timestamp"]].append(row)
-        else:
-            to_send[row["timestamp"]] = [row]
-
-    print("Server running at port 8000")
-
-    async with websockets.serve(handler, "127.0.0.1", 8000):
+    async with websockets.serve(
+        partial(handler, path=parquet_file_path), "127.0.0.1", 8000
+    ):
+        print("Server running at port 8000")
         await asyncio.Future()  # run forever
 
 
